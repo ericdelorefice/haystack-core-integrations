@@ -4,13 +4,11 @@
 
 from typing import Any
 
-from haystack import Document, component, logging
+from haystack import Document, component
 from haystack.utils import Secret
 
 from firecrawl import AsyncFirecrawl, Firecrawl  # type: ignore[import-untyped]
 from firecrawl.types import SearchData  # type: ignore[import-untyped]
-
-logger = logging.getLogger(__name__)
 
 
 @component
@@ -95,6 +93,9 @@ class FirecrawlWebSearch:
         :returns: A dictionary with the following keys:
             - `documents`: List of documents with search result content.
             - `links`: List of URLs from the search results.
+        :raises Exception: whatever `Firecrawl.search` raises, for example an authentication or
+            rate-limit error. A search that could not run is not reported as a search with no
+            results.
         """
         self.warm_up()
         assert self._firecrawl_client is not None  # noqa: S101
@@ -104,14 +105,10 @@ class FirecrawlWebSearch:
         if "limit" not in params and self.top_k is not None:
             params["limit"] = self.top_k
 
-        try:
-            search_response = self._firecrawl_client.search(
-                query=query,
-                **params,
-            )
-        except Exception as error:
-            logger.exception(f"Failed to search for query '{query}': {error}")
-            return {"documents": [], "links": []}
+        search_response = self._firecrawl_client.search(
+            query=query,
+            **params,
+        )
 
         documents, links = self._parse_search_response(search_response)
         return {"documents": documents, "links": links}
@@ -132,6 +129,9 @@ class FirecrawlWebSearch:
         :returns: A dictionary with the following keys:
             - `documents`: List of documents with search result content.
             - `links`: List of URLs from the search results.
+        :raises Exception: whatever `AsyncFirecrawl.search` raises, for example an authentication or
+            rate-limit error. A search that could not run is not reported as a search with no
+            results.
         """
         await self.warm_up_async()
         assert self._async_firecrawl_client is not None  # noqa: S101
@@ -141,14 +141,10 @@ class FirecrawlWebSearch:
         if "limit" not in params and self.top_k is not None:
             params["limit"] = self.top_k
 
-        try:
-            search_response = await self._async_firecrawl_client.search(
-                query=query,
-                **params,
-            )
-        except Exception as error:
-            logger.exception(f"Failed to search for query '{query}': {error}")
-            return {"documents": [], "links": []}
+        search_response = await self._async_firecrawl_client.search(
+            query=query,
+            **params,
+        )
 
         documents, links = self._parse_search_response(search_response)
         return {"documents": documents, "links": links}

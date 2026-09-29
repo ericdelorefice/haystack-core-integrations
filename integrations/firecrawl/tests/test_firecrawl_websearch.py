@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -197,24 +198,34 @@ class TestRun:
         assert result["links"] == ["https://example.com"]
         mock_async_client.search.assert_awaited_once()
 
-    def test_run_returns_empty_on_error(self, mock_client) -> None:
+    def test_run_propagates_the_error(self, mock_client) -> None:
+        """A search that could not run must not look like a search that found nothing."""
         mock_client.search.side_effect = Exception("API error")
 
         ws = FirecrawlWebSearch(api_key=Secret.from_token("test-key"))
         ws._firecrawl_client = mock_client
 
-        result = ws.run(query="test")
-        assert result["documents"] == []
-        assert result["links"] == []
+        with pytest.raises(Exception, match="API error"):
+            ws.run(query="test")
 
     @pytest.mark.asyncio
-    async def test_run_async_returns_empty_on_error(self, mock_async_client) -> None:
+    async def test_run_async_propagates_the_error(self, mock_async_client) -> None:
         mock_async_client.search = AsyncMock(side_effect=Exception("API error"))
 
         ws = FirecrawlWebSearch(api_key=Secret.from_token("test-key"))
         ws._async_firecrawl_client = mock_async_client
 
-        result = await ws.run_async(query="test")
+        with pytest.raises(Exception, match="API error"):
+            await ws.run_async(query="test")
+
+    def test_an_empty_result_set_is_still_empty(self, mock_client) -> None:
+        """The other half: a search that ran and matched nothing still returns empty, not an error."""
+        mock_client.search.return_value = SimpleNamespace(web=[])
+
+        ws = FirecrawlWebSearch(api_key=Secret.from_token("test-key"))
+        ws._firecrawl_client = mock_client
+
+        result = ws.run(query="test")
         assert result["documents"] == []
         assert result["links"] == []
 
